@@ -1,28 +1,16 @@
 import xml.etree.ElementTree as ET
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
-# Importa la librería para manejar zonas horarias.
-# zoneinfo es para Python 3.9+. Si usas una versión anterior, instala y usa pytz.
-try:
-    import zoneinfo
-except ImportError:
-    # Si zoneinfo no está disponible, intenta usar pytz.
-    # Necesitarás instalarlo: pip install pytz
-    from pytz import timezone as ZoneInfo
-    print("Usando la librería 'pytz'. Asegúrate de que está instalada (`pip install pytz`).")
-
-
-def ajustar_hora_epg_inteligente(archivo_entrada, archivo_salida):
+def ajustar_hora_epg_definitivo(archivo_entrada, archivo_salida):
     """
-    Ajusta la hora en un archivo EPG XML de forma inteligente, aplicando
-    diferentes reglas según la zona horaria de cada programa.
+    Ajusta la hora en un archivo EPG XML aplicando una corrección universal.
+    Esta versión asume que TODOS los tiempos en el archivo original están 2 horas
+    adelantados respecto a la hora UTC real, ignorando la zona horaria
+    especificada en el propio archivo.
     """
     try:
         tree = ET.parse(archivo_entrada)
         root = tree.getroot()
-
-        # Define la zona horaria de destino (España)
-        ZONA_HORARIA_ES = zoneinfo.ZoneInfo("Europe/Madrid")
 
         # Itera sobre todos los elementos 'programme'
         for programme in root.findall('programme'):
@@ -30,35 +18,30 @@ def ajustar_hora_epg_inteligente(archivo_entrada, archivo_salida):
             stop_str = programme.get('stop')
 
             if start_str and stop_str:
-                formato_fecha = "%Y%m%d%H%M%S %z"
-
-                # Procesa el tiempo de inicio (start)
-                start_dt_original = datetime.strptime(start_str, formato_fecha)
+                # --- LÓGICA DEFINITIVA ---
                 
-                # Procesa el tiempo de fin (stop)
-                stop_dt_original = datetime.strptime(stop_str, formato_fecha)
-
-                # --- LÓGICA INTELIGENTE ---
-                # Revisa el offset (la diferencia horaria con UTC)
-                offset_horas = start_dt_original.utcoffset().total_seconds() / 3600
-
-                if offset_horas == 2.0:
-                    # CASO 1: Es un canal +0200 (España). Corregimos el error de 2h.
-                    start_dt_corregido = start_dt_original - timedelta(hours=2)
-                    stop_dt_corregido = stop_dt_original - timedelta(hours=2)
-                else:
-                    # CASO 2: Es un canal de otra zona horaria.
-                    # Asumimos que la hora es correcta y la convertimos a la hora española.
-                    start_dt_corregido = start_dt_original.astimezone(ZONA_HORARIA_ES)
-                    stop_dt_corregido = stop_dt_original.astimezone(ZONA_HORARIA_ES)
+                # 1. Extrae solo la parte de la fecha y hora, ignorando la zona horaria del final.
+                #    Ej: "20250830210000 +0000" -> "20250830210000"
+                start_time_str_naive = start_str.split(' ')[0]
+                stop_time_str_naive = stop_str.split(' ')[0]
                 
-                # Vuelve a formatear las fechas al formato original (YYYYMMDDHHMMSS +ZZZZ)
-                programme.set('start', start_dt_corregido.strftime(formato_fecha))
-                programme.set('stop', stop_dt_corregido.strftime(formato_fecha))
+                # 2. Convierte esa cadena a un objeto de tiempo, tratándolo como si fuera UTC.
+                start_dt_erroneo_utc = datetime.strptime(start_time_str_naive, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+                stop_dt_erroneo_utc = datetime.strptime(stop_time_str_naive, "%Y%m%d%H%M%S").replace(tzinfo=timezone.utc)
+                
+                # 3. Resta 2 horas para obtener la hora UTC REAL.
+                start_dt_real_utc = start_dt_erroneo_utc - timedelta(hours=2)
+                stop_dt_real_utc = stop_dt_erroneo_utc - timedelta(hours=2)
+
+                # 4. Formatea la fecha al formato final deseado.
+                #    Python se encargará de poner el offset correcto (+0200 para verano en España).
+                formato_final = "%Y%m%d%H%M%S %z"
+                programme.set('start', start_dt_real_utc.strftime(formato_final))
+                programme.set('stop', stop_dt_real_utc.strftime(formato_final))
 
         # Guarda el XML modificado
         tree.write(archivo_salida, encoding='utf-8', xml_declaration=True)
-        print(f"Archivo EPG ajustado inteligentemente y guardado en: {archivo_salida}")
+        print(f"Archivo EPG con corrección definitiva guardado en: {archivo_salida}")
 
     except ET.ParseError as e:
         print(f"Error al analizar el archivo XML: {e}")
@@ -66,12 +49,12 @@ def ajustar_hora_epg_inteligente(archivo_entrada, archivo_salida):
         print(f"Ha ocurrido un error inesperado: {e}")
 
 # --- Instrucciones de uso ---
-# 1. Guarda este código en un archivo con extensión .py (ej. "ajustar_epg_auto.py").
+# 1. Guarda este código (ej. "ajustar_epg_definitivo.py").
 # 2. Pon tu archivo XML original en la misma carpeta (ej. "guia.xml").
-# 3. Ejecuta el script desde la terminal: python ajustar_epg_auto.py
+# 3. Ejecuta el script desde la terminal: python ajustar_epg_definitivo.py
 
 if __name__ == '__main__':
-    archivo_xml_original = 'guiaiptv.xml'  # Cambia esto por el nombre de tu archivo
-    archivo_xml_corregido = 'guiaepg.xml' # Nombre del nuevo archivo
+    archivo_xml_original = 'guiaiptv.xml'
+    archivo_xml_corregido = 'guiaepg.xml'
 
-    ajustar_hora_epg_inteligente(archivo_xml_original, archivo_xml_corregido)
+    ajustar_hora_epg_definitivo(archivo_xml_original, archivo_xml_corregido)
