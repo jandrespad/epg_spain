@@ -1,18 +1,28 @@
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta
 
-def ajustar_hora_epg(archivo_entrada, archivo_salida, horas_a_restar):
-    """
-    Ajusta la hora de inicio y fin de los programas en un archivo XML de EPG.
+# Importa la librería para manejar zonas horarias.
+# zoneinfo es para Python 3.9+. Si usas una versión anterior, instala y usa pytz.
+try:
+    import zoneinfo
+except ImportError:
+    # Si zoneinfo no está disponible, intenta usar pytz.
+    # Necesitarás instalarlo: pip install pytz
+    from pytz import timezone as ZoneInfo
+    print("Usando la librería 'pytz'. Asegúrate de que está instalada (`pip install pytz`).")
 
-    Args:
-        archivo_entrada (str): Ruta al archivo XML de entrada.
-        archivo_salida (str): Ruta donde se guardará el archivo XML modificado.
-        horas_a_restar (int): El número de horas a restar.
+
+def ajustar_hora_epg_inteligente(archivo_entrada, archivo_salida):
+    """
+    Ajusta la hora en un archivo EPG XML de forma inteligente, aplicando
+    diferentes reglas según la zona horaria de cada programa.
     """
     try:
         tree = ET.parse(archivo_entrada)
         root = tree.getroot()
+
+        # Define la zona horaria de destino (España)
+        ZONA_HORARIA_ES = zoneinfo.ZoneInfo("Europe/Madrid")
 
         # Itera sobre todos los elementos 'programme'
         for programme in root.findall('programme'):
@@ -20,24 +30,35 @@ def ajustar_hora_epg(archivo_entrada, archivo_salida, horas_a_restar):
             stop_str = programme.get('stop')
 
             if start_str and stop_str:
-                # Formato de fecha y hora en el XML
                 formato_fecha = "%Y%m%d%H%M%S %z"
 
-                # Convierte las cadenas de texto a objetos datetime
-                start_dt = datetime.strptime(start_str, formato_fecha)
-                stop_dt = datetime.strptime(stop_str, formato_fecha)
+                # Procesa el tiempo de inicio (start)
+                start_dt_original = datetime.strptime(start_str, formato_fecha)
+                
+                # Procesa el tiempo de fin (stop)
+                stop_dt_original = datetime.strptime(stop_str, formato_fecha)
 
-                # Resta las horas necesarias
-                nuevo_start_dt = start_dt - timedelta(hours=horas_a_restar)
-                nuevo_stop_dt = stop_dt - timedelta(hours=horas_a_restar)
+                # --- LÓGICA INTELIGENTE ---
+                # Revisa el offset (la diferencia horaria con UTC)
+                offset_horas = start_dt_original.utcoffset().total_seconds() / 3600
 
-                # Vuelve a formatear las fechas al formato original
-                programme.set('start', nuevo_start_dt.strftime(formato_fecha))
-                programme.set('stop', nuevo_stop_dt.strftime(formato_fecha))
+                if offset_horas == 2.0:
+                    # CASO 1: Es un canal +0200 (España). Corregimos el error de 2h.
+                    start_dt_corregido = start_dt_original - timedelta(hours=2)
+                    stop_dt_corregido = stop_dt_original - timedelta(hours=2)
+                else:
+                    # CASO 2: Es un canal de otra zona horaria.
+                    # Asumimos que la hora es correcta y la convertimos a la hora española.
+                    start_dt_corregido = start_dt_original.astimezone(ZONA_HORARIA_ES)
+                    stop_dt_corregido = stop_dt_original.astimezone(ZONA_HORARIA_ES)
+                
+                # Vuelve a formatear las fechas al formato original (YYYYMMDDHHMMSS +ZZZZ)
+                programme.set('start', start_dt_corregido.strftime(formato_fecha))
+                programme.set('stop', stop_dt_corregido.strftime(formato_fecha))
 
         # Guarda el XML modificado
         tree.write(archivo_salida, encoding='utf-8', xml_declaration=True)
-        print(f"Archivo EPG ajustado y guardado en: {archivo_salida}")
+        print(f"Archivo EPG ajustado inteligentemente y guardado en: {archivo_salida}")
 
     except ET.ParseError as e:
         print(f"Error al analizar el archivo XML: {e}")
@@ -45,14 +66,12 @@ def ajustar_hora_epg(archivo_entrada, archivo_salida, horas_a_restar):
         print(f"Ha ocurrido un error inesperado: {e}")
 
 # --- Instrucciones de uso ---
-# 1. Guarda este código en un archivo con extensión .py (por ejemplo, "ajustar_epg.py").
-# 2. Asegúrate de tener tu archivo XML en la misma carpeta (por ejemplo, "guia.xml").
-# 3. Modifica los nombres de los archivos si es necesario.
-# 4. Ejecuta el script desde la terminal: python ajustar_epg.py
+# 1. Guarda este código en un archivo con extensión .py (ej. "ajustar_epg_auto.py").
+# 2. Pon tu archivo XML original en la misma carpeta (ej. "guia.xml").
+# 3. Ejecuta el script desde la terminal: python ajustar_epg_auto.py
 
 if __name__ == '__main__':
     archivo_xml_original = 'guiaiptv.xml'  # Cambia esto por el nombre de tu archivo
     archivo_xml_corregido = 'guiaepg.xml' # Nombre del nuevo archivo
-    horas_de_ajuste = 2  # Las horas que necesitas restar
 
-    ajustar_hora_epg(archivo_xml_original, archivo_xml_corregido, horas_de_ajuste)
+    ajustar_hora_epg_inteligente(archivo_xml_original, archivo_xml_corregido)
