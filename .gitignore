@@ -1,0 +1,19 @@
+# .gitignore
+
+# Fichero de entorno - contiene variables sensibles
+.env
+
+# Directorios de entorno virtual de Python
+/venv/
+/.venv/
+/env/
+/ENV/
+
+# Caché y artefactos de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Ficheros generados (opcional, pero recomendado)
+#*.xml
