@@ -1,4 +1,4 @@
-# Proyecto Ajustador de EPG
+# EPG Fixed Timezone (Spain)
 
 Este script de Python descarga un fichero EPG (Guía Electrónica de Programas) en formato XML desde una URL, ajusta las marcas de tiempo de los programas según unas reglas predefinidas y guarda el resultado en un nuevo fichero XML.
 
