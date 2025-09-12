@@ -68,4 +68,4 @@ Una vez que hayas completado la instalación y configuración, simplemente ejecu
 python main.py
 ```
 
-El script descargará el fichero, procesará los datos y, si todo va bien, verás un mensaje de confirmación. El fichero corregido (`guiaepg_corregida.xml` o el nombre que hayas configurado) aparecerá en el directorio raíz del proyecto.
+El script descargará el fichero, procesará los datos y, si todo va bien, verás un mensaje de confirmación. El fichero corregido (`ficherosalida.xml` o el nombre que hayas configurado) aparecerá en el directorio raíz del proyecto.
