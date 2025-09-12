@@ -1,6 +1,6 @@
 # .gitignore
 
-# Fichero de entorno - contiene variables sensibles
+# Fichero de entorno
 .env
 
 # Directorios de entorno virtual de Python
@@ -15,5 +15,5 @@ __pycache__/
 *.pyo
 *.pyd
 
-# Ficheros generados (opcional, pero recomendado)
-#*.xml
+# Scripts
+update_epg.sh
